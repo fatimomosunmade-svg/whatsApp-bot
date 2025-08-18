@@ -1,12 +1,11 @@
 // index.js (ESM)
 import pino from "pino"
 import baileys from "@whiskeysockets/baileys"
-import qrcode from "qrcode-terminal"
+import QRCode from "qrcode"
 import fs from "fs"
 import axios from "axios"
 import ytdl from "ytdl-core"
 import yts from "yt-search"
-import path from "path"
 
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = baileys
 
@@ -32,9 +31,13 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds)
 
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on("connection.update", async (update) => {
     const { connection, qr } = update
-    if (qr) qrcode.generate(qr, { small: true })
+    if (qr) {
+      // Save QR as PNG for Render / remote servers
+      await QRCode.toFile("qr.png", qr)
+      console.log("📌 QR code saved as qr.png. Open and scan to connect your bot.")
+    }
     if (connection === "open") console.log("✅ Connected")
     if (connection === "close") {
       console.log("🔁 Connection closed, reconnecting...")
@@ -56,7 +59,6 @@ async function startBot() {
     // Load premium users
     let premiumUsers = JSON.parse(fs.readFileSync(PREMIUM_FILE))
 
-    // Check if admin
     const isAdmin = number === ADMIN_NUMBER
 
     // ------------------------ Admin Commands ------------------------
@@ -168,7 +170,6 @@ To use a command, type it starting with a dot .`
         stream.pipe(writeStream)
 
         writeStream.on("finish", async () => {
-          // delete fetching message
           await sock.sendMessage(from, { delete: { remoteJid: from, id: msg.key.id } })
 
           await sock.sendMessage(from, {
