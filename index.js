@@ -10,14 +10,14 @@ import yts from "yt-search"
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = baileys
 
 // Admin number
-const ADMIN_NUMBER = "2348086850026"
+const ADMIN_NUMBER = process.env.ADMIN_NUMBER
 
 // JSON storage for premium users
 const PREMIUM_FILE = "premium.json"
 if (!fs.existsSync(PREMIUM_FILE)) fs.writeFileSync(PREMIUM_FILE, JSON.stringify([]))
 
 // OpenWeather API key
-const OPENWEATHER_KEY = "0bfc48fa9d8a1575af7575b80cb41468"
+const OPENWEATHER_KEY = process.env.OPENWEATHER_KEY
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth_info")
