@@ -5,7 +5,7 @@ import moment from "moment";
 import express from "express";
 
 // === CONFIG ===
-const WEATHER_API_KEY = "0bfc48fa9d8a1575af7575b80cb41468";
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 
 // === Banner ===
 console.log(`
@@ -35,6 +35,12 @@ const commands = {
       await sock.sendMessage(from, { text: "⚠️ Usage: .weather <city>" });
       return;
     }
+
+    if (!WEATHER_API_KEY) {
+      await sock.sendMessage(from, { text: "❌ WEATHER_API_KEY not set in environment!" });
+      return;
+    }
+
     try {
       const res = await axios.get(
         `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
@@ -54,7 +60,6 @@ const commands = {
 
 // === Start WhatsApp Bot ===
 async function startBot() {
-  // 👉 Use auth_info instead of auth
   const { state, saveCreds } = await useMultiFileAuthState("auth_info");
   const { version } = await fetchLatestBaileysVersion();
 
