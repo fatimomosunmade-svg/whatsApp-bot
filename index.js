@@ -5,6 +5,7 @@ import P from "pino";
 import axios from "axios";
 import moment from "moment";
 import express from "express";
+import { JSDOM } from "jsdom";
 
 // === CONFIG ===
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
@@ -12,7 +13,6 @@ const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 // === Admin / Premium setup ===
 const admins = ["2348086850026"]; // Your WhatsApp ID
 let premiumUsers = []; // Stores premium users dynamically
-let freemiumUsers = []; // Optional freemium tier
 
 // === Banner ===
 console.log(`
@@ -22,6 +22,7 @@ console.log(`
    .ping       -> Pong!
    .time       -> Current Time
    .weather <city>
+   .search <query>
    Admin: .adduser .removeuser .listpremium .showheavyusers
    Everyone: .kick <number>
 =============================
@@ -59,6 +60,7 @@ const commands = {
     }
   },
 
+  // --- Admin Commands ---
   adduser: async (sock, from, args, sender) => {
     if (!admins.includes(sender)) return;
     const newUser = args[0];
@@ -82,13 +84,29 @@ const commands = {
 
   showheavyusers: async (sock, from, sender) => {
     if (!admins.includes(sender)) return;
-    // Placeholder for heavy users logic
     await sock.sendMessage(from, { text: "⚡ Heavy users feature coming soon!" });
   },
 
+  // --- Everyone ---
   kick: async (sock, from, args) => {
-    const target = args[0]; // e.g. 080xxxxxxx
+    const target = args[0];
     await sock.sendMessage(from, { text: `⚠️ Tried to kick ${target} (logic not implemented yet)` });
+  },
+
+  search: async (sock, from, args) => {
+    if (!args.length) return await sock.sendMessage(from, { text: "⚠️ Usage: .search <query>" });
+    const query = encodeURIComponent(args.join(" "));
+    try {
+      const res = await axios.get(`https://www.google.com/search?q=${query}`);
+      const dom = new JSDOM(res.data);
+      const results = Array.from(dom.window.document.querySelectorAll("h3"))
+        .slice(0, 5)
+        .map((el, i) => `${i + 1}. ${el.textContent}`)
+        .join("\n");
+      await sock.sendMessage(from, { text: `🔎 Top results for "${args.join(" ")}":\n${results || "No results found"}` });
+    } catch (e) {
+      await sock.sendMessage(from, { text: "❌ Search failed" });
+    }
   }
 };
 
@@ -100,13 +118,21 @@ async function startBot() {
 
     const sock = makeWASocket({
       version,
-      printQRInTerminal: true,
       auth: state,
       logger: P({ level: "silent" })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
+    // QR / Connection updates
+    sock.ev.on("connection.update", (update) => {
+      const { qr, connection } = update;
+      if (qr) console.log("📲 QR Code received (scan if needed)");
+      if (connection === "open") console.log("✅ WhatsApp socket connected successfully!");
+      if (connection === "close") console.log("❌ WhatsApp connection closed");
+    });
+
+    // Message handler
     sock.ev.on("messages.upsert", async ({ messages }) => {
       const m = messages[0];
       if (!m.message || !m.key.remoteJid) return;
@@ -134,7 +160,6 @@ async function startBot() {
       }
     });
 
-    console.log("✅ WhatsApp socket connected successfully!");
   } catch (err) {
     console.error("❌ Failed to start WhatsApp socket:", err);
     console.log("⏳ Retrying in 5 seconds...");
