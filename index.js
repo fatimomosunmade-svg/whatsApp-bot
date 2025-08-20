@@ -2,6 +2,7 @@ import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "
 import P from "pino";
 import axios from "axios";
 import moment from "moment";
+import express from "express";
 
 // === CONFIG ===
 const WEATHER_API_KEY = "0bfc48fa9d8a1575af7575b80cb41468";
@@ -9,7 +10,7 @@ const WEATHER_API_KEY = "0bfc48fa9d8a1575af7575b80cb41468";
 // === Banner ===
 console.log(`
 =============================
-   🚀 WhizBot Online 🚀
+   🚀 WhatsApp Bot Online 🚀
    Commands:
    .ping    -> Pong!
    .time    -> Current Time
@@ -53,7 +54,8 @@ const commands = {
 
 // === Start WhatsApp Bot ===
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  // 👉 Use auth_info instead of auth
+  const { state, saveCreds } = await useMultiFileAuthState("auth_info");
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
@@ -93,3 +95,10 @@ async function startBot() {
 }
 
 startBot();
+
+// === Dummy webserver for Render ===
+const app = express();
+app.get("/", (req, res) => res.send("🚀 WhatsApp Bot is running!"));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("✅ Dummy server running on port " + (process.env.PORT || 3000));
+});
