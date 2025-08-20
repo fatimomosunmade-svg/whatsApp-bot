@@ -1,78 +1,95 @@
-// index.js
-import pino from "pino"
-import baileys from "@whiskeysockets/baileys"
-import QRCode from "qrcode"
-import fs from "fs"
-import axios from "axios"
-import ytdl from "ytdl-core"
-import yts from "yt-search"
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import P from "pino";
+import axios from "axios";
+import moment from "moment";
 
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = baileys
+// === CONFIG ===
+const WEATHER_API_KEY = "0bfc48fa9d8a1575af7575b80cb41468";
 
-// Admin number & API key from environment
-const ADMIN_NUMBER = process.env.ADMIN_NUMBER
-const OPENWEATHER_KEY = process.env.OPENWEATHER_KEY
+// === Banner ===
+console.log(`
+=============================
+   🚀 WhizBot Online 🚀
+   Commands:
+   .ping    -> Pong!
+   .time    -> Current Time
+   .weather <city>
+=============================
+`);
 
-// Premium users file
-const PREMIUM_FILE = "premium.json"
-if (!fs.existsSync(PREMIUM_FILE)) fs.writeFileSync(PREMIUM_FILE, JSON.stringify([]))
+// === Command Handler ===
+const commands = {
+  ping: async (sock, from) => {
+    await sock.sendMessage(from, { text: "🏓 Pong!" });
+  },
 
+  time: async (sock, from) => {
+    const now = moment().format("dddd, MMMM Do YYYY, h:mm:ss A");
+    await sock.sendMessage(from, { text: `⏰ Current time: ${now}` });
+  },
+
+  weather: async (sock, from, args) => {
+    const city = args[0];
+    if (!city) {
+      await sock.sendMessage(from, { text: "⚠️ Usage: .weather <city>" });
+      return;
+    }
+    try {
+      const res = await axios.get(
+        `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
+      );
+      const data = res.data;
+      const reply = `🌍 Weather in ${data.name}:
+- ${data.weather[0].description}
+- 🌡 Temp: ${data.main.temp}°C
+- 💨 Wind: ${data.wind.speed} m/s
+- 💧 Humidity: ${data.main.humidity}%`;
+      await sock.sendMessage(from, { text: reply });
+    } catch (e) {
+      await sock.sendMessage(from, { text: "❌ City not found!" });
+    }
+  }
+};
+
+// === Start WhatsApp Bot ===
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth_info")
-  const { version } = await fetchLatestBaileysVersion()
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
     version,
+    printQRInTerminal: true,
     auth: state,
-    logger: pino({ level: "silent" })
-  })
+    logger: P({ level: "silent" })
+  });
 
-  // ✅ Show QR as ASCII in logs
-  sock.ev.on("connection.update", (update) => {
-    const { connection, qr } = update
-    if (qr) {
-      QRCode.toString(qr, { type: "terminal" }, (err, url) => {
-        if (err) return console.error(err)
-        console.log(url)
-      })
-    }
+  sock.ev.on("creds.update", saveCreds);
 
-    if (connection === "open") {
-      console.log("✅ WhatsApp connected successfully!")
-    }
-  })
-
-  sock.ev.on("creds.update", saveCreds)
-
-  // Example handler: respond to "ping"
   sock.ev.on("messages.upsert", async ({ messages }) => {
-    const m = messages[0]
-    if (!m.message) return
+    const m = messages[0];
+    if (!m.message || !m.key.remoteJid) return;
 
-    const from = m.key.remoteJid
-    const text = m.message.conversation || m.message.extendedTextMessage?.text
+    const from = m.key.remoteJid;
+    const body =
+      m.message.conversation ||
+      m.message.extendedTextMessage?.text ||
+      "";
 
-    if (!text) return
+    if (!body.startsWith(".")) return; // Only commands start with "."
 
-    if (text.toLowerCase() === "ping") {
-      await sock.sendMessage(from, { text: "pong ✅" })
-    }
+    const args = body.slice(1).trim().split(/ +/);
+    const cmdName = args.shift().toLowerCase();
 
-    // Example: Weather
-    if (text.startsWith("!weather ")) {
-      const city = text.split(" ")[1]
+    const cmd = commands[cmdName];
+    if (cmd) {
       try {
-        const res = await axios.get(
-          `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${OPENWEATHER_KEY}&units=metric`
-        )
-        const data = res.data
-        const reply = `🌤 Weather in *${data.name}*\nTemp: ${data.main.temp}°C\nCondition: ${data.weather[0].description}`
-        await sock.sendMessage(from, { text: reply })
-      } catch (err) {
-        await sock.sendMessage(from, { text: "❌ Could not fetch weather." })
+        await cmd(sock, from, args);
+      } catch (e) {
+        await sock.sendMessage(from, { text: "⚠️ Error running command!" });
+        console.error(e);
       }
     }
-  })
+  });
 }
 
-startBot()
+startBot();
