@@ -98,46 +98,54 @@ const commands = {
   }
 };
 
-// === Start WhatsApp Bot ===
+// === Start WhatsApp Bot safely ===
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth_info");
-  const { version } = await fetchLatestBaileysVersion();
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+    const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
-    version,
-    printQRInTerminal: true,
-    auth: state,
-    logger: P({ level: "silent" })
-  });
+    const sock = makeWASocket({
+      version,
+      printQRInTerminal: true,
+      auth: state,
+      logger: P({ level: "silent" })
+    });
 
-  sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const m = messages[0];
-    if (!m.message || !m.key.remoteJid) return;
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      const m = messages[0];
+      if (!m.message || !m.key.remoteJid) return;
 
-    const from = m.key.remoteJid;
-    const body =
-      m.message.conversation ||
-      m.message.extendedTextMessage?.text ||
-      "";
+      const from = m.key.remoteJid;
+      const body =
+        m.message.conversation ||
+        m.message.extendedTextMessage?.text ||
+        "";
 
-    if (!body.startsWith(".")) return; // Only commands start with "."
+      if (!body.startsWith(".")) return; // Only commands
 
-    const args = body.slice(1).trim().split(/ +/);
-    const cmdName = args.shift().toLowerCase();
-    const sender = m.key.participant || m.key.remoteJid;
+      const args = body.slice(1).trim().split(/ +/);
+      const cmdName = args.shift().toLowerCase();
+      const sender = m.key.participant || m.key.remoteJid;
 
-    const cmd = commands[cmdName];
-    if (cmd) {
-      try {
-        await cmd(sock, from, args, sender);
-      } catch (e) {
-        await sock.sendMessage(from, { text: "⚠️ Error running command!" });
-        console.error(e);
+      const cmd = commands[cmdName];
+      if (cmd) {
+        try {
+          await cmd(sock, from, args, sender);
+        } catch (e) {
+          await sock.sendMessage(from, { text: "⚠️ Error running command!" });
+          console.error(e);
+        }
       }
-    }
-  });
+    });
+
+    console.log("✅ WhatsApp socket connected successfully!");
+  } catch (err) {
+    console.error("❌ Failed to start WhatsApp socket:", err);
+    console.log("⏳ Retrying in 5 seconds...");
+    setTimeout(startBot, 5000); // Auto-reconnect
+  }
 }
 
 startBot();
