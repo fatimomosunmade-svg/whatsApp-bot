@@ -1,4 +1,6 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import * as baileys from "@whiskeysockets/baileys";
+const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = baileys;
+
 import P from "pino";
 import axios from "axios";
 import moment from "moment";
@@ -9,7 +11,7 @@ const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 
 // === Admin / Premium setup ===
 const admins = ["2348086850026"]; // Your WhatsApp ID
-let premiumUsers = []; // Will store premium users dynamically
+let premiumUsers = []; // Stores premium users dynamically
 let freemiumUsers = []; // Optional freemium tier
 
 // === Banner ===
@@ -38,14 +40,9 @@ const commands = {
 
   weather: async (sock, from, args) => {
     const city = args[0];
-    if (!city) {
-      await sock.sendMessage(from, { text: "⚠️ Usage: .weather <city>" });
-      return;
-    }
-    if (!WEATHER_API_KEY) {
-      await sock.sendMessage(from, { text: "❌ WEATHER_API_KEY not set in environment!" });
-      return;
-    }
+    if (!city) return await sock.sendMessage(from, { text: "⚠️ Usage: .weather <city>" });
+    if (!WEATHER_API_KEY) return await sock.sendMessage(from, { text: "❌ WEATHER_API_KEY not set!" });
+
     try {
       const res = await axios.get(
         `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
@@ -57,12 +54,11 @@ const commands = {
 - 💨 Wind: ${data.wind.speed} m/s
 - 💧 Humidity: ${data.main.humidity}%`;
       await sock.sendMessage(from, { text: reply });
-    } catch (e) {
+    } catch {
       await sock.sendMessage(from, { text: "❌ City not found!" });
     }
   },
 
-  // === Admin commands ===
   adduser: async (sock, from, args, sender) => {
     if (!admins.includes(sender)) return;
     const newUser = args[0];
@@ -90,10 +86,8 @@ const commands = {
     await sock.sendMessage(from, { text: "⚡ Heavy users feature coming soon!" });
   },
 
-  // === Anyone can use ===
   kick: async (sock, from, args) => {
     const target = args[0]; // e.g. 080xxxxxxx
-    // Placeholder: implement group kick logic later
     await sock.sendMessage(from, { text: `⚠️ Tried to kick ${target} (logic not implemented yet)` });
   }
 };
@@ -144,7 +138,7 @@ async function startBot() {
   } catch (err) {
     console.error("❌ Failed to start WhatsApp socket:", err);
     console.log("⏳ Retrying in 5 seconds...");
-    setTimeout(startBot, 5000); // Auto-reconnect
+    setTimeout(startBot, 5000);
   }
 }
 
